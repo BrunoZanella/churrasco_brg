@@ -14,10 +14,23 @@ import base64
 from PIL import Image
 import io
 
+def image_to_base64(image_path):
+    """Converte imagem para base64 para uso no CSS"""
+    try:
+        if os.path.exists(image_path):
+            with open(image_path, "rb") as img_file:
+                return base64.b64encode(img_file.read()).decode()
+        else:
+            # Se não encontrar a imagem, cria uma placeholder
+            return None
+    except Exception as e:
+        st.error(f"Erro ao carregar imagem {image_path}: {e}")
+        return None
+
 # Configuração da página
 st.set_page_config(
-    page_title="Dashboard do Churrasco",
-    page_icon="🍖",
+    page_title="Churrasco",
+    page_icon="🥩",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -536,17 +549,37 @@ try:
     tz = pytz.timezone(config['EVENT_TZ'])
     event_datetime = tz.localize(datetime.strptime(f"{config['EVENT_DATE']} {config['EVENT_TIME']}", "%Y-%m-%d %H:%M"))
     countdown = get_countdown(event_datetime)
-#    event_display = f"{event_datetime.strftime('%d/%m/%Y às %H:%M')} ({config['EVENT_TZ']})"
     event_display = f"{event_datetime.strftime('%d/%m/%Y às %H:%M')}"
 except:
     countdown = "Data inválida"
     event_display = f"{config['EVENT_DATE']} às {config['EVENT_TIME']}"
 
+# Convertendo imagens do cabeçalho para base64
+header_images_b64 = {}
+header_image_paths = {
+    'silvinho': 'images/silvinha.png',
+    'familia': 'images/david.png'
+}
+
+for key, path in header_image_paths.items():
+    b64 = image_to_base64(path)
+    if b64:
+        header_images_b64[key] = f"data:image/png;base64,{b64}"
+    else:
+        # Placeholder se não encontrar a imagem
+        header_images_b64[key] = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iNDAiIGN5PSI0MCIgcj0iNDAiIGZpbGw9IiNGRkQ3MDAiLz4KPHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHg9IjIwIiB5PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiI+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiLz4KPC9zdmc+Cjwvc3ZnPg=="
+
 st.markdown(f"""
 <div class="hero-header">
-    <div class="hero-title">Dashboard do Churrasco</div>
-    <div class="hero-subtitle">{event_display}</div>
-    <div class="countdown">{countdown}</div>
+    <div style="display: flex; align-items: center; justify-content: space-between; position: relative;">
+        <img src="{header_images_b64.get('silvinho', '')}" alt="Silvio Santos" style="width: 150px; height: 150px; object-fit: contain; border-radius: 8px;">
+        <div style="flex: 1; text-align: center;">
+            <div class="hero-title">Dashboard do Churrasco</div>
+            <div class="hero-subtitle">{event_display}</div>
+        </div>
+        <img src="{header_images_b64.get('familia', '')}" alt="Família Silvio Santos" style="width: 150px; height: 150px; object-fit: contain; border-radius: 8px;">
+    </div>
+    <div class="countdown" style="margin-top: 1rem;">{countdown}</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -611,19 +644,6 @@ with kpi_cols[5]:
     </div>
     """, unsafe_allow_html=True)
 
-def image_to_base64(image_path):
-    """Converte imagem para base64 para uso no CSS"""
-    try:
-        if os.path.exists(image_path):
-            with open(image_path, "rb") as img_file:
-                return base64.b64encode(img_file.read()).decode()
-        else:
-            # Se não encontrar a imagem, cria uma placeholder
-            return None
-    except Exception as e:
-        st.error(f"Erro ao carregar imagem {image_path}: {e}")
-        return None
-
 silvio_images_b64 = {}
 image_paths = {
     'silvio1': 'images/silvio_orgulhoso_face.png',
@@ -637,7 +657,7 @@ for key, path in image_paths.items():
         silvio_images_b64[key] = f"data:image/png;base64,{b64}"
     else:
         # Placeholder se não encontrar a imagem
-        silvio_images_b64[key] = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA1MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjUiIGN5PSIyNSIgcj0iMjUiIGZpbGw9IiNGRkQ3MDAiLz4KPHN2ZyB3aWR0aD0iMzAiIGhlaWdodD0iMzAiIHg9IjEwIiB5PSIxMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiI+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiLz4KPHBhdGggZD0ibTMgMTIgMS41LTEuNUw5IDEybC0xLjUgMS41TDMgMTJabTYuNS0zLjVMMTEgN2w0IDQtMS41IDEuNUw5IDguNVptNy41IDcuNUwxNyAxN2wtNCA0IDEuNSAxLjVMMTggMTZabS03LjUgMy41TDEzIDE3bC00LTQgMS41LTEuNUwxNSAxNS41WiIvPgo8L3N2Zz4KPC9zdmc+"
+        silvio_images_b64[key] = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA1MCA1MCIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjUiIGN5PSIyNSIgcj0iMjUiIGZpbGw9IiNGRkQ3MDAiLz4KPHN2ZyB3aWR0aD0iMzAiIGhlaWdodD0iMzAiIHg9IjEwIiB5PSIxMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiI+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiLz4KPHBhdGggZD0ibTMgMTIgMS41LTEuNUw5IDEybC0xLjUgMS41TDMgMTJabTYuNS0zLjVMMTEgN2w0IDQtMS41IDEuNUw5IDguNVptNy41IDcuNUwxNyAxN2wtNCA0IDEuNSAxLjVMMTggMTZabS03LjUgMy41TDEzIDE3bC00LTQgMS41LTEuNUwxNSAxNS41WiIvPgo8L3N2Zz4KPC9zdmc+"
 
 # Barra de progresso
 st.markdown("### Progresso dos Pagamentos")
@@ -716,7 +736,7 @@ if not df_mysql.empty:
         if mes_num <= mes_atual:
             return "Qual a dificuldade?"
         else:
-            return "Ta no orcamento?"
+            return "Tá no orçamento?"
     
     for mes in config['PAYMENT_MONTHS']:
         if mes in df_display.columns:
@@ -758,7 +778,7 @@ if not df_mysql.empty:
             return 'color: #10b981; font-weight: 600'
         elif val == "Qual a dificuldade?":
             return 'color: #ef4444; font-weight: 600'
-        elif val == "Ta no orcamento?":
+        elif val == "Tá no orçamento?":
             return 'color: #f97316; font-weight: 600'
         return ''
     
@@ -949,6 +969,12 @@ if json_data.get('itens'):
         margin: 10px 0;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         transition: all 0.3s ease;
+        /* Adicionando altura fixa e flexbox para alinhamento consistente */
+        min-height: 180px;
+        height: 180px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
     }
     .item-card:hover {
         transform: translateY(-2px);
@@ -975,6 +1001,12 @@ if json_data.get('itens'):
         gap: 10px;
         justify-content: flex-end;
     }
+    /* Adicionando container para conteúdo flexível */
+    .item-content {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -991,17 +1023,22 @@ if json_data.get('itens'):
                 item = items[item_index]
                 
                 with col:
-                    # Card do item
+                    observacoes_html = ""
+                    if item.get("observacoes") and item["observacoes"].strip():
+                        observacoes_html = f'<div class="item-details" style="font-style: italic;">{item["observacoes"]}</div>'
+                    
                     st.markdown(f"""
                     <div class="item-card">
-                        <div class="item-title">{item['item']}</div>
-                        <div class="item-details">{item['quantidade']} {item['unidade']}</div>
-                        <div class="item-collaborator">👤 {item['nome_colaborador']}</div>
-                        {f'<div class="item-details" style="font-style: italic;">{item.get("observacoes", "")}</div>' if item.get("observacoes") else ''}
+                        <div class="item-content">
+                            <div class="item-title">{item['item']}</div>
+                            <div class="item-details">{item['quantidade']} {item['unidade']}</div>
+                            <div class="item-collaborator">👤 {item['nome_colaborador']}</div>
+                            {observacoes_html}
+                    <!--    </div> -->
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Botões dentro do card
+                    # Botões fora do card HTML mas dentro da coluna
                     col_edit, col_delete = st.columns(2)
                     
                     with col_edit:
@@ -1118,7 +1155,7 @@ st.markdown("""
         font-weight: 500;
     }
     
-    /* Fallback usando JavaScript para aplicar cores */
+    /* Fallbacks usando JavaScript para aplicar cores */
     .status-text-pago {
         color: #10b981 !important;
         font-weight: 600 !important;
@@ -1146,3 +1183,4 @@ st.markdown("""
 
 # with col3:
 #     st.caption(f"Dados: MySQL + JSON local")
+
