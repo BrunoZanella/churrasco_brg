@@ -29,7 +29,7 @@ def image_to_base64(image_path):
 
 # Configuração da página
 st.set_page_config(
-    page_title="Churrasco",
+    page_title="Dashboard do Churrasco",
     page_icon="🥩",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -483,7 +483,7 @@ def calculate_financials(df, meses_pagamento):
         }
     
     colaboradores_count = len(df)
-    total_devido = PAYMENT_VALUE * len(meses_pagamento) * colaboradores_count
+    total_evento = PAYMENT_VALUE * len(meses_pagamento) * colaboradores_count
     
     # Soma pagamentos realizados
     pagamentos_realizados = 0
@@ -492,6 +492,7 @@ def calculate_financials(df, meses_pagamento):
             pagamentos_realizados += df[mes].sum()
     
     total_arrecadado = PAYMENT_VALUE * pagamentos_realizados
+    total_devido = total_evento - total_arrecadado
     percentual_pago = (pagamentos_realizados / (len(meses_pagamento) * colaboradores_count) * 100) if colaboradores_count > 0 else 0
     
     return {
