@@ -574,7 +574,7 @@ st.markdown(f"""
     <div style="display: flex; align-items: center; justify-content: space-between; position: relative;">
         <img src="{header_images_b64.get('silvinho', '')}" alt="Silvio Santos" style="width: 150px; height: 150px; object-fit: contain; border-radius: 8px;">
         <div style="flex: 1; text-align: center;">
-            <div class="hero-title">Dashboard do Churrasco</div>
+            <div class="hero-title">Streamlit é melhor que Power BI</div>
             <div class="hero-subtitle">{event_display}</div>
         </div>
         <img src="{header_images_b64.get('familia', '')}" alt="Família Silvio Santos" style="width: 150px; height: 150px; object-fit: contain; border-radius: 8px;">
