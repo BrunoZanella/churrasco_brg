@@ -1,0 +1,14 @@
+# Ignore Python virtual environment
+venv/
+
+# Ignore main script
+churrasco.py
+
+# Ignore data file
+data.json
+
+# Ignore Streamlit config and cache
+.streamlit/
+
+# Ignore uploads directory
+uploads/
