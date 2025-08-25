@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import mysql.connector
 from sqlalchemy import create_engine
-import json
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -391,7 +390,6 @@ def load_config():
         'EVENT_TIME': os.getenv('EVENT_TIME', get_secret_safe('EVENT_TIME', '16:00')),
         'EVENT_TZ': os.getenv('EVENT_TZ', get_secret_safe('EVENT_TZ', 'America/Sao_Paulo')),
         'PAYMENT_MONTHS': os.getenv('PAYMENT_MONTHS', get_secret_safe('PAYMENT_MONTHS', 'agosto_pago,setembro_pago,outubro_pago,novembro_pago,dezembro_pago')).split(','),
-        'JSON_PATH': os.getenv('JSON_PATH', get_secret_safe('JSON_PATH', 'data.json')),
         'DB_READONLY': os.getenv('DB_READONLY', get_secret_safe('DB_READONLY', '1')) == '1'
     }
     return config
@@ -418,52 +416,160 @@ def read_mysql_data(config):
         st.error(f"Erro ao conectar com MySQL: {e}")
         return pd.DataFrame()
 
-# Funções JSON
-def load_json(json_path):
-    """Carrega dados do JSON"""
-    if not os.path.exists(json_path):
-        # Cria a partir do seed_data.json ou defaults
-        if os.path.exists('seed_data.json'):
-            with open('seed_data.json', 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        else:
-            data = {
-                "itens": [],
-                "pessoas_extras": {}
-            }
-        save_json_atomic(data, json_path)
-    
-    with open(json_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+def get_mysql_connection(config):
+    """Cria conexão MySQL"""
+    return mysql.connector.connect(
+        host=config['DB_HOST'],
+        port=config['DB_PORT'],
+        user=config['DB_USER'],
+        password=config['DB_PASSWORD'],
+        database=config['DB_NAME']
+    )
 
-def save_json_atomic(data, json_path):
-    """Salva JSON de forma atômica"""
-    temp_path = json_path + '.tmp'
-    with open(temp_path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(temp_path, json_path)
+def load_config_data(config):
+    """Carrega dados da tabela confra_config"""
+    try:
+        conn = get_mysql_connection(config)
+        cursor = conn.cursor(dictionary=True)
+        
+        # Buscar itens
+        cursor.execute("SELECT * FROM confra_config WHERE config_type = 'item' ORDER BY created_at")
+        itens = cursor.fetchall()
+        
+        # Buscar pessoas extras
+        cursor.execute("SELECT colaborador_id, extra_pessoas FROM confra_config WHERE config_type = 'pessoas_extras'")
+        pessoas_extras_rows = cursor.fetchall()
+        pessoas_extras = {str(row['colaborador_id']): row['extra_pessoas'] for row in pessoas_extras_rows}
+        
+        cursor.close()
+        conn.close()
+        
+        return {
+            "itens": itens,
+            "pessoas_extras": pessoas_extras
+        }
+    except Exception as e:
+        st.error(f"Erro ao carregar dados: {e}")
+        return {"itens": [], "pessoas_extras": {}}
 
-def add_item(colaborador_id, nome_colaborador, item, quantidade, unidade, observacoes, json_path):
-    """Adiciona item ao JSON"""
-    data = load_json(json_path)
-    
-    new_item = {
-        "colaborador_id": colaborador_id,
-        "nome_colaborador": nome_colaborador,
-        "item": item,
-        "quantidade": quantidade,
-        "unidade": unidade,
-        "observacoes": observacoes
-    }
-    
-    data["itens"].append(new_item)
-    save_json_atomic(data, json_path)
+def add_item(colaborador_id, nome_colaborador, item, quantidade, unidade, observacoes, config):
+    """Adiciona item na tabela confra_config"""
+    try:
+        conn = get_mysql_connection(config)
+        cursor = conn.cursor()
+        
+        query = """
+        INSERT INTO confra_config (config_type, colaborador_id, nome_colaborador, item, quantidade, unidade, observacoes)
+        VALUES ('item', %s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(query, (colaborador_id, nome_colaborador, item, quantidade, unidade, observacoes))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Clear cache to refresh data
+        st.cache_data.clear()
+        
+    except Exception as e:
+        st.error(f"Erro ao adicionar item: {e}")
 
-def set_pessoas_extras(mapping_por_id, json_path):
-    """Define pessoas extras no JSON"""
-    data = load_json(json_path)
-    data["pessoas_extras"] = mapping_por_id
-    save_json_atomic(data, json_path)
+def update_item(item_id, colaborador_id, nome_colaborador, item, quantidade, unidade, observacoes, config):
+    """Atualiza item na tabela confra_config"""
+    try:
+        conn = get_mysql_connection(config)
+        cursor = conn.cursor()
+        
+        query = """
+        UPDATE confra_config 
+        SET colaborador_id = %s, nome_colaborador = %s, item = %s, quantidade = %s, unidade = %s, observacoes = %s
+        WHERE id = %s AND config_type = 'item'
+        """
+        cursor.execute(query, (colaborador_id, nome_colaborador, item, quantidade, unidade, observacoes, item_id))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Clear cache to refresh data
+        st.cache_data.clear()
+        
+    except Exception as e:
+        st.error(f"Erro ao atualizar item: {e}")
+
+def delete_item(item_id, config):
+    """Remove item da tabela confra_config"""
+    try:
+        conn = get_mysql_connection(config)
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM confra_config WHERE id = %s AND config_type = 'item'", (item_id,))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Clear cache to refresh data
+        st.cache_data.clear()
+        
+    except Exception as e:
+        st.error(f"Erro ao excluir item: {e}")
+
+def set_pessoas_extras(mapping_por_id, config):
+    """Define pessoas extras na tabela confra_config"""
+    try:
+        conn = get_mysql_connection(config)
+        cursor = conn.cursor()
+        
+        # Busca os nomes dos colaboradores para incluir na inserção
+        df_mysql = read_mysql_data(config)
+        colaborador_names = {str(row['colaborador_id']): row['nome_colaborador'] for _, row in df_mysql.iterrows()}
+        
+        # Busca registros existentes de pessoas_extras
+        cursor.execute("SELECT colaborador_id, extra_pessoas FROM confra_config WHERE config_type = 'pessoas_extras'")
+        existing_records = {str(row[0]): row[1] for row in cursor.fetchall()}
+        
+        # Processa cada colaborador
+        for colaborador_id, extra_pessoas in mapping_por_id.items():
+            colaborador_id_str = str(colaborador_id)
+            nome_colaborador = colaborador_names.get(colaborador_id_str, "")
+            
+            if extra_pessoas > 0:
+                if colaborador_id_str in existing_records:
+                    # Atualiza apenas se o valor mudou
+                    if existing_records[colaborador_id_str] != extra_pessoas:
+                        query = """
+                        UPDATE confra_config 
+                        SET extra_pessoas = %s, nome_colaborador = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE config_type = 'pessoas_extras' AND colaborador_id = %s
+                        """
+                        cursor.execute(query, (extra_pessoas, nome_colaborador, colaborador_id))
+                else:
+                    # Insere novo registro
+                    query = """
+                    INSERT INTO confra_config (config_type, colaborador_id, nome_colaborador, extra_pessoas)
+                    VALUES ('pessoas_extras', %s, %s, %s)
+                    """
+                    cursor.execute(query, (colaborador_id, nome_colaborador, extra_pessoas))
+            else:
+                # Remove registro se extra_pessoas = 0 e existe no banco
+                if colaborador_id_str in existing_records:
+                    cursor.execute("DELETE FROM confra_config WHERE config_type = 'pessoas_extras' AND colaborador_id = %s", (colaborador_id,))
+        
+        # Remove registros que não estão mais no mapping_por_id
+        for existing_id in existing_records.keys():
+            if existing_id not in [str(cid) for cid in mapping_por_id.keys()]:
+                cursor.execute("DELETE FROM confra_config WHERE config_type = 'pessoas_extras' AND colaborador_id = %s", (existing_id,))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Clear cache to refresh data
+        st.cache_data.clear()
+        
+    except Exception as e:
+        st.error(f"Erro ao salvar pessoas extras: {e}")
 
 # Funções de cálculo
 def format_currency(value):
@@ -532,7 +638,7 @@ if 'show_add_modal' not in st.session_state:
 
 # Carrega configurações
 config = load_config()
-json_data = load_json(config['JSON_PATH'])
+config_data = load_config_data(config)
 
 current_time = time.time()
 should_refresh = (
@@ -619,7 +725,7 @@ with kpi_cols[2]:
     """, unsafe_allow_html=True)
 
 with kpi_cols[3]:
-    itens_count = len(json_data.get('itens', []))
+    itens_count = len(config_data.get('itens', []))
     st.markdown(f"""
     <div class="kpi-card">
         <div class="kpi-value">{itens_count}</div>
@@ -628,7 +734,7 @@ with kpi_cols[3]:
     """, unsafe_allow_html=True)
 
 with kpi_cols[4]:
-    pessoas_extras_total = sum(json_data.get('pessoas_extras', {}).values())
+    pessoas_extras_total = sum(config_data.get('pessoas_extras', {}).values())
     st.markdown(f"""
     <div class="kpi-card">
         <div class="kpi-value">{pessoas_extras_total}</div>
@@ -793,7 +899,7 @@ if not df_mysql.empty:
 else:
     st.warning("⚠️ Nenhum dado encontrado no MySQL")
 
-# Cadastro de Itens (JSON) - Botão + ao lado do título
+# Cadastro de Itens (MySQL) - Botão + ao lado do título
 st.markdown("""
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <h3 style="margin: 0;">Itens do Churrasco</h3>
@@ -843,7 +949,7 @@ if st.session_state.get('show_add_modal', False):
                 
                 if submitted and colaborador_id:
                     if item.strip():
-                        add_item(colaborador_id, nome_colaborador, item.strip(), quantidade, unidade.strip(), observacoes.strip(), config['JSON_PATH'])
+                        add_item(colaborador_id, nome_colaborador, item.strip(), quantidade, unidade.strip(), observacoes.strip(), config)
                         st.success(f"✅ Item '{item}' cadastrado para {nome_colaborador}!")
                         st.session_state.show_add_modal = False
                         st.session_state.editing = False
@@ -860,7 +966,7 @@ if st.session_state.get('show_add_modal', False):
 
 # Modal de edição de item
 if st.session_state.get('show_edit_modal', False) and st.session_state.edit_item_index is not None:
-    item_to_edit = json_data['itens'][st.session_state.edit_item_index]
+    item_to_edit = config_data['itens'][st.session_state.edit_item_index]
     
     st.markdown("### Editar Item")
     
@@ -892,7 +998,7 @@ if st.session_state.get('show_edit_modal', False) and st.session_state.edit_item
             item = st.text_input("Item", value=item_to_edit['item'])
         
         with col2:
-            quantidade = st.number_input("Quantidade", min_value=1, value=item_to_edit['quantidade'])
+            quantidade = st.number_input("Quantidade", min_value=1, value=int(item_to_edit['quantidade']))
             unidade = st.text_input("Unidade", value=item_to_edit['unidade'])
         
         observacoes = st.text_area("Observações", value=item_to_edit.get('observacoes', ''))
@@ -902,15 +1008,16 @@ if st.session_state.get('show_edit_modal', False) and st.session_state.edit_item
             if st.form_submit_button("Salvar Alterações", type="primary"):
                 if item.strip():
                     # Atualizar item
-                    json_data['itens'][st.session_state.edit_item_index] = {
-                        'colaborador_id': colaborador_id,
-                        'nome_colaborador': nome_colaborador,
-                        'item': item.strip(),
-                        'quantidade': quantidade,
-                        'unidade': unidade.strip(),
-                        'observacoes': observacoes.strip()
-                    }
-                    save_json_atomic(json_data, config['JSON_PATH'])
+                    update_item(
+                        item_to_edit['id'],
+                        colaborador_id, 
+                        nome_colaborador, 
+                        item.strip(), 
+                        quantidade, 
+                        unidade.strip(), 
+                        observacoes.strip(), 
+                        config
+                    )
                     st.success(f"✅ Item '{item}' atualizado!")
                     st.session_state.show_edit_modal = False
                     st.session_state.edit_item_index = None
@@ -929,7 +1036,7 @@ if st.session_state.get('show_edit_modal', False) and st.session_state.edit_item
 
 # Modal de confirmação de exclusão de item
 if st.session_state.get('show_delete_modal', False) and st.session_state.delete_item_index is not None:
-    item_to_delete = json_data['itens'][st.session_state.delete_item_index]
+    item_to_delete = config_data['itens'][st.session_state.delete_item_index]
     
     st.markdown("### Confirmar Exclusão")
     st.warning(f"Tem certeza que deseja excluir o item **{item_to_delete['item']}** de **{item_to_delete['nome_colaborador']}**?")
@@ -938,8 +1045,7 @@ if st.session_state.get('show_delete_modal', False) and st.session_state.delete_
     with col1:
         if st.button("🗑️ Sim, Excluir", type="primary", use_container_width=True):
             # Remover item
-            json_data['itens'].pop(st.session_state.delete_item_index)
-            save_json_atomic(json_data, config['JSON_PATH'])
+            delete_item(item_to_delete['id'], config)
             st.success(f"✅ Item '{item_to_delete['item']}' excluído!")
             st.session_state.show_delete_modal = False
             st.session_state.delete_item_index = None
@@ -955,9 +1061,8 @@ if st.session_state.get('show_delete_modal', False) and st.session_state.delete_
             st.rerun()
 
 # Lista de itens cadastrados
-if json_data.get('itens'):
-    st.markdown("#### Itens Cadastrados")
-    
+if config_data.get('itens'):
+
     # CSS para os cards de itens
     st.markdown("""
     <style>
@@ -1013,7 +1118,7 @@ if json_data.get('itens'):
     
     # Organizando itens em grid de 3 colunas
     items_per_row = 3
-    items = json_data['itens']
+    items = config_data['itens']
     
     for i in range(0, len(items), items_per_row):
         cols = st.columns(items_per_row)
@@ -1056,11 +1161,10 @@ if json_data.get('itens'):
                             st.session_state.editing = True
                             st.rerun()
 
-# Pessoas Extras (JSON)
 with st.expander("👥 Pessoas Extras por Colaborador", expanded=False):
     if not df_mysql.empty:
         with st.form("form_pessoas_extras"):
-            pessoas_extras = json_data.get('pessoas_extras', {})
+            pessoas_extras = config_data.get('pessoas_extras', {})
             
             extras_data = {}
             for _, row in df_mysql.iterrows():
@@ -1076,11 +1180,7 @@ with st.expander("👥 Pessoas Extras por Colaborador", expanded=False):
                 )
             
             if st.form_submit_button("Salvar Pessoas Extras", type="primary"):
-                set_pessoas_extras(extras_data, config['JSON_PATH'])
-                st.success("✅ Pessoas extras salvas!")
-                st.session_state.editing = False
-                time.sleep(1)
-                st.rerun()
+                set_pessoas_extras(extras_data, config)
 
 # JavaScript para preservar posição de rolagem
 st.markdown("""
@@ -1184,4 +1284,3 @@ st.markdown("""
 
 # with col3:
 #     st.caption(f"Dados: MySQL + JSON local")
-
